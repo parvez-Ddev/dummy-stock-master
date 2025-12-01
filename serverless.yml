@@ -48,6 +48,28 @@ provider:
 plugins:
   - serverless-plugin-typescript
   - serverless-offline
+  - serverless-domain-manager
+
+# ============================
+# CUSTOM DOMAIN CONFIGURATION
+# ============================
+
+custom:
+  customDomain:
+    domainName: ${self:custom.domains.${self:provider.stage}}
+    basePath: ""
+    stage: ${self:provider.stage}
+    certificateArn: ${self:custom.certificateArns.${self:provider.stage}}
+    createRoute53Record: true
+    endpointType: regional
+
+  domains:
+    dev: dev.stockmaster.linkpc.net
+    prod: prod.stockmaster.linkpc.net
+
+  certificateArns:
+    dev: arn:aws:acm:ap-south-1:102413378525:certificate/d3e507c1-1e18-4d90-96a7-2c8aa5d603b3
+    prod: arn:aws:acm:ap-south-1:102413378525:certificate/d9f3120a-2cee-4a28-b69c-ced4cf5f0b49
 
 functions:
   createProduct:
