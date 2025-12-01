@@ -1,6 +1,7 @@
 import { db } from "../../utils/dynamo";
 import { success, error } from "../../utils/responses";
 import { z } from "zod";
+import { UpdateCommand } from "@aws-sdk/lib-dynamodb";
 
 const BodySchema = z.object({
   name: z.string().min(1).optional(),
@@ -34,13 +35,15 @@ export const handler = async (event: any) => {
     attrNames[nameKey] = "updatedAt";
     attrValues[valKey] = new Date().toISOString();
 
-    await db.update({
-      TableName: process.env.PRODUCTS_TABLE!,
-      Key: { productId: id },
-      UpdateExpression: "SET " + expr.join(", "),
-      ExpressionAttributeNames: attrNames,
-      ExpressionAttributeValues: attrValues,
-    });
+    await db.send(
+      new UpdateCommand({
+        TableName: process.env.PRODUCTS_TABLE!,
+        Key: { productId: id },
+        UpdateExpression: "SET " + expr.join(", "),
+        ExpressionAttributeNames: attrNames,
+        ExpressionAttributeValues: attrValues,
+      })
+    );
 
     return success({ message: "Updated" });
   } catch (err: any) {
