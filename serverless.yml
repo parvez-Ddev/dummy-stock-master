@@ -12,8 +12,9 @@ provider:
 
   environment:
     STAGE: ${self:provider.stage}
-    PRODUCTS_TABLE: ProductsTable
-    MOVEMENTS_TABLE: MovementsTable
+    PRODUCTS_TABLE: ProductsTable-${self:provider.stage}
+    MOVEMENTS_TABLE: MovementsTable-${self:provider.stage}
+    LOW_STOCK_QUEUE: stockmaster-lowstock-queue-${self:provider.stage}
 
   iam:
     role:
@@ -109,7 +110,7 @@ resources:
     ProductsTable:
       Type: AWS::DynamoDB::Table
       Properties:
-        TableName: ProductsTable
+        TableName: ProductsTable-${self:provider.stage}
         AttributeDefinitions:
           - AttributeName: productId
             AttributeType: S
@@ -121,7 +122,7 @@ resources:
     MovementsTable:
       Type: AWS::DynamoDB::Table
       Properties:
-        TableName: MovementsTable
+        TableName: MovementsTable-${self:provider.stage}
         AttributeDefinitions:
           - AttributeName: movementId
             AttributeType: S
@@ -142,7 +143,7 @@ resources:
     LowStockQueue:
       Type: AWS::SQS::Queue
       Properties:
-        QueueName: stockmaster-lowstock-queue
+        QueueName: stockmaster-lowstock-queue-${self:provider.stage}
 
     LowStockQueuePolicy:
       Type: AWS::SQS::QueuePolicy
