@@ -1,0 +1,171 @@
+service: parvez-test-stock-master
+
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ap-south-1
+  stage: ${opt:stage, 'dev'}
+  memorySize: 256
+  timeout: 30
+
+  environment:
+    STAGE: ${self:provider.stage}
+    PRODUCTS_TABLE: ProductsTable
+    MOVEMENTS_TABLE: MovementsTable
+
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource:
+            - !GetAtt ProductsTable.Arn
+            - !GetAtt MovementsTable.Arn
+            - !Sub "${MovementsTable.Arn}/index/*"
+
+        - Effect: Allow
+          Action:
+            - events:PutEvents
+          Resource: "*"
+
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+          Resource: "*"
+
+plugins:
+  - serverless-plugin-typescript
+  - serverless-offline
+
+functions:
+  createProduct:
+    handler: src/handlers/products/createProduct.handler
+    events:
+      - http:
+          path: products
+          method: post
+
+  getProduct:
+    handler: src/handlers/products/getProduct.handler
+    events:
+      - http:
+          path: products/{id}
+          method: get
+
+  updateProduct:
+    handler: src/handlers/products/updateProduct.handler
+    events:
+      - http:
+          path: products/{id}
+          method: put
+
+  deleteProduct:
+    handler: src/handlers/products/deleteProduct.handler
+    events:
+      - http:
+          path: products/{id}
+          method: delete
+
+  listProducts:
+    handler: src/handlers/products/listProducts.handler
+    events:
+      - http:
+          path: products
+          method: get
+
+  createMovement:
+    handler: src/handlers/movements/createMovement.handler
+    events:
+      - http:
+          path: movements
+          method: post
+
+  listMovementsByProduct:
+    handler: src/handlers/movements/listMovementsByProduct.handler
+    events:
+      - http:
+          path: products/{id}/movements
+          method: get
+
+  alertProcessor:
+    handler: src/handlers/alerts/alertProcessor.handler
+    events:
+      - sqs:
+          arn: !GetAtt LowStockQueue.Arn
+
+resources:
+  Resources:
+    ProductsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ProductsTable
+        AttributeDefinitions:
+          - AttributeName: productId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: productId
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+
+    MovementsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: MovementsTable
+        AttributeDefinitions:
+          - AttributeName: movementId
+            AttributeType: S
+          - AttributeName: productId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: movementId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: ProductMovementsIndex
+            KeySchema:
+              - AttributeName: productId
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+        BillingMode: PAY_PER_REQUEST
+
+    LowStockQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: stockmaster-lowstock-queue
+
+    LowStockQueuePolicy:
+      Type: AWS::SQS::QueuePolicy
+      Properties:
+        Queues:
+          - !Ref LowStockQueue
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: events.amazonaws.com
+              Action: sqs:SendMessage
+              Resource: !GetAtt LowStockQueue.Arn
+
+    LowStockEventRule:
+      Type: AWS::Events::Rule
+      Properties:
+        EventPattern:
+          source:
+            - "stockmaster.products"
+          detail-type:
+            - "LowStockCheck"
+        Targets:
+          - Arn: !GetAtt LowStockQueue.Arn
+            Id: LowStockQueueTarget
